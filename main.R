@@ -2,6 +2,8 @@
 # To predict the sales price for each house based on house attributes and Location
 rm(list = ls())
 library(ggplot2)
+library(moments)
+library(car)
 
 ## Loading Train Data
 train_df = read.csv("data/train.csv", sep=",")
@@ -31,13 +33,17 @@ View(df_na)
 
 # Null values in Alley represent no alley, hence we should add them in a new Level 'None'
 train_df$Alley = replace(train_df$Alley, is.na(train_df$Alley), 'None')
+test_df$Alley = replace(test_df$Alley, is.na(test_df$Alley), 'None')
 
 # We can replace NA values of LotFrontage with mean Lot size (mean LotFrontage)
 train_df$LotFrontage[is.na(train_df$LotFrontage)] = mean(train_df$LotFrontage, na.rm = TRUE)
+test_df$LotFrontage[is.na(test_df$LotFrontage)] = mean(train_df$LotFrontage, na.rm = TRUE)
 
 # If MasVnrType is Null, the type is None and MasVnrArea is 0
 train_df$MasVnrType = replace(train_df$MasVnrType, is.na(train_df$MasVnrType), 'None')
 train_df$MasVnrArea[is.na(train_df$MasVnrArea)] = 0
+test_df$MasVnrType = replace(test_df$MasVnrType, is.na(test_df$MasVnrType), 'None')
+test_df$MasVnrArea[is.na(test_df$MasVnrArea)] = 0
 
 # Similarly for Basement, Garage NA values should represent Level 'None' and their corresponding attributes level 'None'
 na_cols = c('BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1',
@@ -46,102 +52,303 @@ na_cols = c('BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1',
 
 for (i in 1:length(na_cols)){
   train_df[na_cols[i]] = replace(train_df[na_cols[i]], is.na(train_df[na_cols[i]]), 'None')
+  test_df[na_cols[i]] = replace(test_df[na_cols[i]], is.na(test_df[na_cols[i]]), 'None')
 }
 
 # For NA value in Electrical we replace it with most frequent label 'SBrkr'
 table(train_df$Electrical)
 train_df$Electrical[is.na(train_df$Electrical)] = 'SBrkr'
+test_df$Electrical[is.na(test_df$Electrical)] = 'SBrkr'
 
 # Columns FireplaceQu, PoolQC, Fence, MiscFeature have close to or more than 50% values null. 
 # Even if we replace them with a single value these columns will contain a single dominant value. 
 # Hence we choose to remove these columns from analysis.
 train_df = train_df[, !(names(train_df) %in% c('FireplaceQu', 'PoolQC', 'Fence', 'MiscFeature'))]
+test_df = test_df[, !(names(test_df) %in% c('FireplaceQu', 'PoolQC', 'Fence', 'MiscFeature'))]
 
-# For the same reason we will remove the categorical variables with dominant levels
+# For the same reason we will remove the categorical variables with single dominant levels
 cols.categorical = sapply(train_df, is.character)
 del.cols = c()
-for (i in length(cols.categorical)){
-  max_freq = max(table(train_df[cols.categorical[i]]))
-  if (max_freq > nrow(train_df)){
-    del.cols = append(del.cols, cols.categorical[i])
+for (i in 1:length(cols.categorical)){
+  if (!cols.categorical[i]){
+    next
+  }
+  max_freq = max(table(train_df[names(cols.categorical[i])]))
+  if (max_freq > 0.9*nrow(train_df)){
+    # Remove columns having more than 90% data as a same level
+    del.cols = append(del.cols, names(cols.categorical[i]))
   }
 }
 train_df = train_df[, !(names(train_df) %in% del.cols)]
+test_df = test_df[, !(names(test_df) %in% del.cols)]
+
+# GarageYrBlt is incorrectly structured as string
+train_df$GarageYrBlt = as.integer(train_df$GarageYrBlt)
+test_df$GarageYrBlt = as.integer(test_df$GarageYrBlt)
+train_df$GarageYrBlt[is.na(train_df$GarageYrBlt)] = mean(train_df$GarageYrBlt, na.rm = TRUE)
+test_df$GarageYrBlt[is.na(test_df$GarageYrBlt)] = mean(train_df$GarageYrBlt, na.rm = TRUE)
 
 
+## Explanatory Data Analysis
+# As we are considering to fit Multivariate Linear Regression Model, 
+# we need to considering the following assumptions : 
+# 1. Errors are normally distributed with mean 0 and constant variance
+# 2. SalePrice is linearly dependent on other variables
+# 3. There is no Multicollinearity
+# 4. Error terms are independent
+
+# Distribution of Response variable SalePrice
+par(mar=c(5.1,4.1,4.1,2.1))
+par(mfrow=c(1,2))
+hist(train_df$SalePrice, freq=FALSE, col='blue', 
+     main="Distribution of SalePrice", 
+     xlab="SalePrice($)")
+
+summary(train_df$SalePrice)
+sd(train_df$SalePrice)
+skewness(train_df$SalePrice)
+kurtosis(train_df$SalePrice)
+# Average Sales Price of homes is $180,921 with standard deviation $79,442.5
+# It is also positively skewed. It does not appear normally distributed.
+
+qqnorm(y = train_df$SalePrice, pch = 1, frame=FALSE)
+qqline(train_df$SalePrice, col = "steelblue", lwd = 2)
+
+# As QQ plot and density curve shows data is skewed 
+# let us consider log of SalePrice as response variable
+SalePrice.log = log(train_df$SalePrice)
+qqnorm(y = SalePrice.log, pch = 1, frame=FALSE)
+qqline(SalePrice.log, col = "steelblue", lwd = 2)
+
+hist(SalePrice.log, freq=FALSE, col='blue', 
+     main="Distribution of ln(SalePrice)", 
+     xlab="ln(SalePrice)")
+
+summary(SalePrice.log)
+sd(SalePrice.log)
+skewness(SalePrice.log)
+kurtosis(SalePrice.log)
+# From QQ plot and values of skewness and kurtosis we can conclude 
+# ln(SalePrice) follows normal distribution relatively closer than SalePrice
+# Hence we will consider it as our response variable
+train_df$SalePrice = SalePrice.log
 
 
-# To Predict Count
-plot(df$temp, df$count, col='red')
-plot(df$atemp, df$count, col='red')
-
-count.third = quantile(df$count, 3)
-ggplot(df, aes(x=temp, y=count)) + geom_point(aes(color=temp)) + geom_line(aes(y = mean(count)))
-
-ggplot(df, aes(x=datetime, y=count)) + geom_point(aes(color=season))
-
-# corrplot
-num.cols = sapply(df, is.numeric)
-cor.data = cor(df[,num.cols])
-print(corrplot(cor.data, method="color"))
-
-
-ggplot(df, aes(x=factor(season), y=count)) + geom_boxplot(aes(color=factor(season)))
-
-
-# Adding Datetime
-getHour = function(x){
-  return (format(as.POSIXct(x), "%H"))
+# Seeing Relationship of columns against response variable
+par(mar=c(4,2,1,2))
+par(mfrow=c(4,4))
+for (i in 2:(ncol(train_df)-1)){
+  temp_plot.xname = colnames(train_df)[i]
+  temp_plot.x = train_df[, temp_plot.xname]
+  if (cols.categorical[temp_plot.xname] == TRUE){
+    temp_plot.x = as.factor(temp_plot.x)
+  }
+  plot(x = temp_plot.x, 
+       y = train_df$SalePrice,
+       col='blue', xlab=temp_plot.xname,
+       ylab='', ylim=c(10, 14))
 }
-df$hour = as.factor(sapply(df$datetime, getHour))
 
-ggplot(df[df$workingday == 1,], aes(x=hour, y=count)) + geom_point(aes(color=temp), position = position_jitter()) + scale_color_gradient(low="green", high="red")
-ggplot(df[df$workingday == 0,], aes(x=hour, y=count)) + geom_point(aes(color=temp), position = position_jitter()) + scale_color_gradient(low="green", high="red")
+# We can observe OverallQual, OverallCond, YearBuilt, YearRemodAdd, TotalBsmtSF, X1stFlrSF, X2ndFlrSF, GrLivArea, TotRmsAbvGrd, GarageCars, GarageArea, SaleCondition
+# have good linear relation with SalePrice
+
+# Correlation plot
+library(corrplot)
+par(mar=c(5.1,4.1,4.1,2.1))
+par(mfrow=c(1,1))
+cols.numeric = sapply(train_df, is.numeric)
+cor.data = cor(train_df[,cols.numeric])
+print(corrplot(cor.data, method="color"))
+# There is considerable correlation between :
+# - GarageArea and GarageCars
+# - X1stFlrSF and TotalBsmtSF
+# - TotRmsAbvGrnd and GrLivArea
+
+# As Multicolliniarity increases variance of estimators we will eliminate some columns
+# with high correlation
+View(cor.data)
+for (i in 1:(nrow(cor.data)-2)){
+  for (j in (i+1):(ncol(cor.data)-1)){
+    if (abs(cor.data[i, j]) > 0.7){
+      print(paste(rownames(cor.data)[i], rownames(cor.data)[j]))
+    }
+  }
+}
+# The correlation also intuitively makes sense, hence we will remove columns 
+# 'GarageCars', 'TotRmsAbvGrd', 'TotalBsmtSF' as we expect them to convey less useful information
+train_df = train_df[, !(names(train_df) %in% c('GarageCars', 'TotRmsAbvGrd', 'TotalBsmtSF'))]
+test_df = test_df[, !(names(test_df) %in% c('GarageCars', 'TotRmsAbvGrd', 'TotalBsmtSF'))]
+
+# Creating Dummy Variables for Categorical Variables
+library(fastDummies)
+str(train_df)
+
+len.train = nrow(train_df)
+len.test = nrow(test_df)
+
+data = rbind(train_df[, !(names(train_df) %in% c('SalePrice'))], test_df)
+
+# Use Remove first dummy column to reduce multicollinearty due to dummy variables 
+data = dummy_cols(data, remove_first_dummy = TRUE, ignore_na = TRUE)
+
+# Remove categorical variables
+cols.categorical = sapply(data, is.character)
+del.cols = colnames(data[, cols.categorical])
+data = data[, !(names(data) %in% del.cols)]
+
+# Checking dummy variables
+which(colSums(data) <= 1)
+which(colSums(is.na(data)) > 0)
+data.vars = colnames(data)
+
+# Explanatory Variables
+data.exp = data[1:len.train, ]
+which(colSums(data.exp) == 0)
+det(t(data.exp) %*% as.matrix(data.exp))
+which(colSums(unique(data.exp) == data.exp) < 1460)
+
+cor.data = cor(data.exp)
+det(cor.data)
+# Determinant of correlation matrix is close to 0  
+corrplot(cor.data, method="color")
+# This indicates high multicollinearity in data due to added dummy variables
+View(cor.data)
+for (i in 1:(nrow(cor.data)-2)){
+  for (j in (i+1):(ncol(cor.data)-1)){
+    if (abs(cor.data[i, j]) > 0.6){
+      print(paste(rownames(cor.data)[i], rownames(cor.data)[j]))
+    }
+  }
+}
+# The relationship between the pairs are intuitive meaningfull.
+# We can treat them by removing following columns :
+del.cols = c('HouseStyle_2Story', 'MSZoning_FV', 'MSZoning_RM', 'RoofStyle_Hip', 
+             'Exterior2nd_CBlock', 'Exterior2nd_CmentBd', 'Exterior2nd_HdBoard', 
+             'Exterior2nd_MetalSd', 'Exterior2nd_VinylSd', 'Exterior2nd_Wd Sdng',
+             'MasVnrType_None', 'ExterQual_TA','ExterCond_TA', 'BsmtQual_None',
+             'BsmtCond_None', 'BsmtFinType1_None', 'BsmtExposure_None', 'KitchenQual_TA',
+             'GarageType_None', 'GarageFinish_None', 'GarageYrBlt', 'BsmtFinType2_Unf',
+             'HouseStyle_1Story', 'Exterior2nd_Plywood', 'Exterior2nd_Stucco',
+             'Foundation_PConc', 'BsmtFinType2_None', 'BsmtQual_TA', 'GarageType_Detchd',
+             'GarageQual_None', 'SaleType_WD', 'BsmtFullBath', 'BsmtFinType1_Unf',
+             'GrLivArea', 'HalfBath', 'KitchenAbvGr', 'Exterior2nd_Brk Cmn', 
+             'Condition1_Norm', 'Exterior2nd_BrkFace', 'KitchenQual_Gd', 'BsmtCond_TA',
+             'SaleCondition_Normal')
+data = data[, !(names(data) %in% del.cols)]
+data.exp = data[1:len.train, ]
+
+train_df = cbind(data.exp, SalePrice = SalePrice.log)
+test_df = data[(len.train+1):nrow(data), ]
 
 
-# Split
-set.seed(100)
+## Dealing with Outliers
+# We will use Mahalanobis distance to find high leverage points
+data.cov = cov(data.exp)
+data.center = colMeans(data.exp)
+data.md = mahalanobis(data.exp, data.center, data.cov)
+data.md
 
-# Seasonal Split
-s1 = subset(df, season == 1)
-s2 = subset(df, season == 2)
-s3 = subset(df, season == 3)
-s4 = subset(df, season == 4)
+data.md_pvalues = pchisq(data.md, df = ncol(data.exp)-1, lower.tail=FALSE)
+md_comp = data.frame(md = data.md, pvalue = data.md_pvalues)
+View(md_comp)
 
-sample1 = sample.split(s1$count, SplitRatio = 0.7)
-sample2 = sample.split(s2$count, SplitRatio = 0.7)
-sample3 = sample.split(s3$count, SplitRatio = 0.7)
-sample4 = sample.split(s4$count, SplitRatio = 0.7)
+# Considering test size 0.001 we will reject the hypothesis that xi is not a high leverage point if p < 0.001
+md_comp[which(md_comp$pvalue < 0.001),]
+nrow(md_comp[which(md_comp$pvalue < 0.001),])
+# There are higher number of such values as original response variable is skewed
+# These leverage points will not affect regression line much unless the residual is also large 
 
-train = rbind(subset(s1, sample1==TRUE), subset(s2, sample2==TRUE), subset(s3, sample3==TRUE), subset(s4, sample4==TRUE))
-test = rbind(subset(s1, sample1==FALSE), subset(s2, sample2==FALSE), subset(s3, sample3==FALSE), subset(s4, sample4==FALSE))
-View(train)
 
-# Model
-model = lm(count ~ season + holiday + workingday + weather + temp + atemp + humidity + windspeed, train)
-summary(model)
+## Fitting Linear Model
+# Fitting model initially to check residuals
+model1 = lm(SalePrice ~ . , train_df)
+model1.summary = summary(model)
+model1.coeff = model1.summary$coefficients[,1]
+model1.summary
+# From the current model, we get adjusted R^2 = 0.8904 on training data.
+# p value is significantly small implying that chosen variables do explain behavior of SalePrice
 
-res = residuals(model)
-class(res)
-res = as.data.frame(res)
-ggplot(res, aes(res)) + geom_histogram(fill="blue", alpha=0.5, bins=1)
+model1.res = residuals(model1)
+
+par(mfrow=c(1,2))
+hist(model1.res, freq=FALSE, col='blue', 
+     main="Distribution of Residuals")
+
+summary(model1.res)
+sd(model1.res)
+skewness(model1.res)
+kurtosis(model1.res)
+qqnorm(y = model1.res, pch = 1, frame=FALSE)
+qqline(model1.res, col = "steelblue", lwd = 2)
+# Clearly the residuals are not normal currently.
+
+par(mfrow=c(2,2))
+plot(model1)
+# In the residual vs fitted values, residual values are scattered around the predicted values
+# This is expected from model having constant errors and mean zero. 
+# (This is also confirmed by looking at summary of residuals)
+
+# From the QQ plot and Residual vs fitted plot, we can see that Points with 
+# Id 1299, 524, 496 are error outliers.
+# Out of these points 1299 and 524 were also found to be high leverage points.
+# If a point is both, it has very high impact on regression line,
+# hence we will remove these two points.
+train_df = train_df[-c(1299, 524),]
+
+# Observing Variance Inflation Factor
+model1.vif = as.data.frame(vif(model1))
+# Variance Inflation factor multiplies the variance of coefficients in a multicollinear model.
+# This increases variance and reduces our trust on corresponding p values. 
+# Hence we will remove all columns having VIF > 5.
+del.cols = rownames(model1.vif)[which(model1.vif > 5)]
+train_df = train_df[, !(names(train_df) %in% del.cols)]
+test_df = test_df[, !(names(test_df) %in% del.cols)]
+
+
+# Fitting Linear model 2
+model2 = lm(SalePrice ~ . , train_df)
+model2.summary = summary(model)
+model2.coeff = model2.summary$coefficients[,1]
+model2.summary
+# From the second model, we get the same adjusted R^2 = 0.8904 on training data.
+# This shows reducing multicollinearity does not affect model performance.
+
+model2.res = residuals(model2)
+
+par(mfrow=c(1,2))
+hist(model2.res, freq=FALSE, col='blue', 
+     main="Distribution of Residuals")
+
+summary(model2.res)
+sd(model2.res)
+skewness(model2.res)
+kurtosis(model2.res)
+qqnorm(y = model2.res, pch = 1, frame=FALSE)
+qqline(model2.res, col = "steelblue", lwd = 2)
+# The residuals behave more closer to normal here.
+
+par(mfrow=c(2,2))
+plot(model2)
+# From the QQ plot and Residual vs fitted plot, we can see that Points with 
+# Id 496, 31, 633, 376, 347 are error outliers and 251, 326, 595, 1011, 1187, 1369 are leverage points (by Cook’s Distance plot).
+# Out of these points 31, 376, 347, 595, 1187 were also found to be high leverage points.
+# Hence we will remove these points.
+train_df = train_df[-c(31, 376, 347, 595, 1187),]
+data.exp = train_df[, !(names(train_df) %in% c('SalePrice'))]
+
+# Now as we have reduced multicollinearity we can consider only the variables 
+# with significantly low p values of having zero regression coefficient (considering p < 0.1)
+model2.sig_vars = names(which(model2.summary$coefficients[,4] < 0.1))
+
+
+# Fitting Model on significant variables
+train_df = train_df[, model2.sig_vars]
+
 
 count.predictions = predict(model, test)
 results = cbind(count.predictions, test$count)
 colnames(results) = c('prediction', 'actual')
 results = as.data.frame(results)
-
-
-to_zero = function(x){
-  if (x < 0){
-    return(0);
-  }
-  else{
-    return(x);
-  }
-}
-
-results$prediction = sapply(results$prediction, to_zero)
 
 head(results)
 
@@ -152,25 +359,4 @@ sse = sum((results$prediction - results$actual)^2)
 sst = sum((mean(df$count) - results$actual)^2)
 R2 = 1 - sse/sst
 R2
-
-
-
-# Backward Selection
-cols = colnames(df)[-c(1, 12, 13)]
-cols
-
-while(TRUE){
-  model = lm(as.formula(paste("count ~ ", paste(cols, collapse = '+'))), train)
-  model.pval = summary(model)$coefficients[,4]
-  model.maxp = unname(which(model.pval == max(model.pval))) - 1
-  maxp = max(model.pval)
-  
-  print(paste(cols, collapse = '+'))
-  if (maxp > 0.05){
-    cols = cols[-c(model.maxp)]  
-  }
-  else{
-    break
-  }
-}
 
