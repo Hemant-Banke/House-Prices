@@ -1,5 +1,8 @@
 ## AIM :
 # To predict the sales price for each house based on house attributes and Location
+# This problem is part of Kaggle competition
+# House Prices - Advanced Regression Techniques (https://www.kaggle.com/c/house-prices-advanced-regression-techniques)
+
 rm(list = ls())
 library(ggplot2)
 library(moments)
@@ -249,7 +252,7 @@ data.md = mahalanobis(data.exp, data.center, data.cov)
 data.md
 
 data.md_pvalues = pchisq(data.md, df = ncol(data.exp)-1, lower.tail=FALSE)
-md_comp = data.frame(md = data.md, pvalue = data.md_pvalues)
+md_comp = data.frame(Id = data.exp$Id, md = data.md, pvalue = data.md_pvalues)
 View(md_comp)
 
 # Considering test size 0.001 we will reject the hypothesis that xi is not a high leverage point if p < 0.001
@@ -272,7 +275,7 @@ model1.res = residuals(model1)
 
 par(mfrow=c(1,2))
 hist(model1.res, freq=FALSE, col='blue', 
-     main="Distribution of Residuals")
+     main="Distribution of Residuals") 
 
 summary(model1.res)
 sd(model1.res)
@@ -294,6 +297,7 @@ plot(model1)
 # If a point is both, it has very high impact on regression line,
 # hence we will remove these two points.
 train_df = train_df[-c(1299, 524),]
+data.exp = train_df[, !(names(train_df) %in% c('SalePrice'))]
 
 # Observing Variance Inflation Factor
 model1.vif = as.data.frame(vif(model1))
@@ -328,11 +332,19 @@ qqline(model2.res, col = "steelblue", lwd = 2)
 
 par(mfrow=c(2,2))
 plot(model2)
+
+
+ttdf = train_df
+ttdf = ttdf[!(rownames(ttdf) %in% c(31, 376, 347, 496, 633, 595, 1187)), ]
+modeltt = lm(SalePrice ~ . , ttdf)
+plot(modeltt)
+
+
 # From the QQ plot and Residual vs fitted plot, we can see that Points with 
 # Id 496, 31, 633, 376, 347 are error outliers and 251, 326, 595, 1011, 1187, 1369 are leverage points (by Cook’s Distance plot).
 # Out of these points 31, 376, 347, 595, 1187 were also found to be high leverage points.
 # Hence we will remove these points.
-train_df = train_df[-c(31, 376, 347, 496, 633, 595, 1187),]
+train_df = train_df[!(rownames(train_df) %in% c(31, 376, 347, 496, 633, 595, 1187)),]
 data.exp = train_df[, !(names(train_df) %in% c('SalePrice'))]
 
 # Now that we have reduced multicollinearity, we can consider only the variables 
@@ -351,7 +363,7 @@ model3 = lm(SalePrice ~ . , train_df)
 model3.summary = summary(model3)
 model3.coeff = model3.summary$coefficients[,1]
 model3.summary
-# From the third model, we get the adjusted R^2 = 0.872 on training data.
+# From the third model, we get the adjusted R^2 = 0.8744 on training data.
 
 model3.res = residuals(model3)
 
@@ -413,12 +425,12 @@ md_comp = cbind(md_comp,
                 influential = (md_comp$leverage == TRUE & md_comp$error == TRUE))
 View(md_comp)
 sum(md_comp$influential)
-# There are only six points that are influential. 
+# There are only three points that are influential. 
 # Hence we will choose to eliminate all error outliers
 error_indices = as.integer(names(error_outliers[which(error_outliers == TRUE)]))
 
-data.exp = data.exp[-error_indices, ]
-train_df = train_df[-error_indices, ]
+data.exp = data.exp[!(rownames(data.exp) %in% error_indices), ]
+train_df = train_df[!(rownames(train_df) %in% error_indices), ]
 
 
 # Fitting Model
@@ -426,7 +438,7 @@ model4 = lm(SalePrice ~ . , train_df)
 model4.summary = summary(model4)
 model4.coeff = model4.summary$coefficients[,1]
 model4.summary
-# From the fourth model, we get the adjusted R^2 = 0.8726 on training data.
+# From the fourth model, we get the adjusted R^2 = 0.89901 on training data.
 
 model4.res = residuals(model4)
 
@@ -440,40 +452,49 @@ skewness(model4.res)
 kurtosis(model4.res)
 qqnorm(y = model4.res, pch = 1, frame=FALSE)
 qqline(model4.res, col = "steelblue", lwd = 2)
-# The residuals behave more closer to normal here.
+# The residuals behave very close to normal here.
 
 par(mfrow=c(2,2))
 plot(model4)
 
+par(mfrow=c(1,1))
 plot(model4.res)
-
-# As errors are now roughly normal we can eliminate error outliers using Z test 
-# with size 1%
-lines(x=1:nrow(train_df), 
-      y=rep((mean(model3.res) + 2.57*sd(model3.res)), nrow(train_df)),
-      col="blue")
-lines(x=1:nrow(train_df), 
-      y=rep((mean(model3.res) - 2.57*sd(model3.res)), nrow(train_df)),
-      col="blue")
-
-error_outliers = abs(model3.res - mean(model3.res))/sd(model3.res) > 2.57
+# There are some leverage points but the error is minimal hence they will not have substantial effect regression line
 
 
+## Prediction
+# We will use model4 to predict the SalePrice for test data
+
+# Fixing NA is test values
+test_Id = read.csv("data/test.csv", sep=",")$Id
+total_na = colSums(is.na(test_df))
+df_na = data.frame(
+  col = colnames(test_df[which(total_na > 0)]), 
+  count = total_na[which(total_na > 0)]
+)
+barplot(df_na$count ~ df_na$col, col='blue', xlab='Columns', ylab='NA count')
+View(df_na)
+
+test_df$GarageArea[is.na(test_df$GarageArea)] = mean(train_df$GarageArea, na.rm = TRUE)
+na_cols = c('MSZoning_RL', 'Exterior1st_BrkComm', 'Exterior1st_BrkFace', 'Exterior1st_Stone')
+for (i in 1:length(na_cols)){
+  test_df[na_cols[i]][is.na(test_df[na_cols[i]])] = 0
+}
 
 
+# Predicting
+predictions = predict(model4, test_df)
+sum(is.na(predictions))
 
-count.predictions = predict(model, test)
-results = cbind(count.predictions, test$count)
-colnames(results) = c('prediction', 'actual')
-results = as.data.frame(results)
+# as we were predicting ln(SalePrice)
+SalePrice.prediction = exp(predictions)
 
-head(results)
+# Preparing Submission
+results = data.frame(Id = test_Id, SalePrice = SalePrice.prediction)
+View(results)
 
-mse = mean((results$prediction - results$actual)^2)
-mse
+write.csv(results, './submission.csv', quote = FALSE, row.names=FALSE)
 
-sse = sum((results$prediction - results$actual)^2)
-sst = sum((mean(df$count) - results$actual)^2)
-R2 = 1 - sse/sst
-R2
+# This submission scored 0.16274 and ranked 3104 on 2021-11-21
+
 
