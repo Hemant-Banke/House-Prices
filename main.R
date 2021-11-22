@@ -31,7 +31,7 @@ df_na = data.frame(
   col = colnames(train_df[which(total_na > 0)]), 
   count = total_na[which(total_na > 0)]
 )
-barplot(df_na$count ~ df_na$col, col='blue', xlab='Columns', ylab='NA count')
+barplot(df_na$count ~ df_na$col, col='blue', xlab='Columns', ylab='NA count', main="Missing values")
 View(df_na)
 
 # Null values in Alley represent no alley, hence we should add them in a new Level 'None'
@@ -334,12 +334,6 @@ par(mfrow=c(2,2))
 plot(model2)
 
 
-ttdf = train_df
-ttdf = ttdf[!(rownames(ttdf) %in% c(31, 376, 347, 496, 633, 595, 1187)), ]
-modeltt = lm(SalePrice ~ . , ttdf)
-plot(modeltt)
-
-
 # From the QQ plot and Residual vs fitted plot, we can see that Points with 
 # Id 496, 31, 633, 376, 347 are error outliers and 251, 326, 595, 1011, 1187, 1369 are leverage points (by Cook’s Distance plot).
 # Out of these points 31, 376, 347, 595, 1187 were also found to be high leverage points.
@@ -496,5 +490,4 @@ View(results)
 write.csv(results, './submission.csv', quote = FALSE, row.names=FALSE)
 
 # This submission scored 0.16274 and ranked 3104 on 2021-11-21
-
 
