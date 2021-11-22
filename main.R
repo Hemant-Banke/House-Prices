@@ -94,7 +94,7 @@ test_df$GarageYrBlt[is.na(test_df$GarageYrBlt)] = mean(train_df$GarageYrBlt, na.
 
 ## Explanatory Data Analysis
 # As we are considering to fit Multivariate Linear Regression Model, 
-# we need to considering the following assumptions : 
+# we need to consider the following assumptions : 
 # 1. Errors are normally distributed with mean 0 and constant variance
 # 2. SalePrice is linearly dependent on other variables
 # 3. There is no Multicollinearity
@@ -223,7 +223,7 @@ for (i in 1:(nrow(cor.data)-2)){
     }
   }
 }
-# The relationship between the pairs are intuitive meaningfull.
+# The relationship between the pairs are intuitively meaningful.
 # We can treat them by removing following columns :
 del.cols = c('HouseStyle_2Story', 'MSZoning_FV', 'MSZoning_RM', 'RoofStyle_Hip', 
              'Exterior2nd_CBlock', 'Exterior2nd_CmentBd', 'Exterior2nd_HdBoard', 
@@ -258,7 +258,7 @@ View(md_comp)
 # Considering test size 0.001 we will reject the hypothesis that xi is not a high leverage point if p < 0.001
 md_comp[which(md_comp$pvalue < 0.001),]
 nrow(md_comp[which(md_comp$pvalue < 0.001),])
-# There are higher number of such values as original response variable is skewed
+# There are higher number of such values in data
 # These leverage points will not affect regression line much unless the residual is also large 
 
 
@@ -459,7 +459,7 @@ model4.hat = hatvalues(model4)
 model4.bi = (model4.res^2)/(1 - model4.hat)
 plot(y = model4.bi, x = fitted(model4), xlab="Fitted Values", ylab="bi", 
      main="bi vs predicted values")
-# There are some leverage points but the error is minimal hence they will not have substantial effect regression line
+# There are some leverage points but the error is minimal hence they will not have substantial effect on regression line
 
 
 ## Prediction
