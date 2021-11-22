@@ -379,13 +379,13 @@ plot(model3)
 # Plotting bi's vs predicted values
 model3.hat = hatvalues(model3)
 model3.bi = (model3.res^2)/(1 - model3.hat)
-par(mfrow=c(1,1))
+par(mfrow=c(1,2))
 plot(y = model3.bi, x = fitted(model3), xlab="Fitted Values", ylab="bi", 
      main="bi vs predicted values")
 # As the plot is not increasing, it signifies error variance is constant 
 # but there are still some outliers in data
 
-plot(model3.res)
+plot(model3.res, main='Residual Plot')
 
 # As errors are now roughly normal we can eliminate error outliers using Z test 
 # with size 1%
@@ -432,7 +432,7 @@ model4 = lm(SalePrice ~ . , train_df)
 model4.summary = summary(model4)
 model4.coeff = model4.summary$coefficients[,1]
 model4.summary
-# From the fourth model, we get the adjusted R^2 = 0.89901 on training data.
+# From the fourth model, we get the adjusted R^2 = 0.8901 on training data.
 
 model4.res = residuals(model4)
 
@@ -451,8 +451,14 @@ qqline(model4.res, col = "steelblue", lwd = 2)
 par(mfrow=c(2,2))
 plot(model4)
 
-par(mfrow=c(1,1))
-plot(model4.res)
+par(mfrow=c(1,2))
+plot(model4.res, main="Residual Plot")
+
+# Plotting bi's vs predicted values
+model4.hat = hatvalues(model4)
+model4.bi = (model4.res^2)/(1 - model4.hat)
+plot(y = model4.bi, x = fitted(model4), xlab="Fitted Values", ylab="bi", 
+     main="bi vs predicted values")
 # There are some leverage points but the error is minimal hence they will not have substantial effect regression line
 
 
