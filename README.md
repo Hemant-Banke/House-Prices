@@ -108,7 +108,7 @@ Seeing Relationship of columns against response variable we observe that 'Overal
   where bi = (ei)^2/(1 - hi)
   ![bi Plots](https://github.com/Hemant-Banke/House-Prices/blob/main/img/plot_model3_bi?raw=true)
   As the plot is not increasing, it signifies error variance is constant but there are still some outliers in data. 
-  As errors are now roughly normal we can eliminate error outliers using Z test with size 1%. 
+  As residuals are now roughly normal we can eliminate error outliers using Z test with size 1%. 
   
 - Fitting Final model after removing outliers
   ```
@@ -127,7 +127,10 @@ Seeing Relationship of columns against response variable we observe that 'Overal
   ![bi Plots](https://github.com/Hemant-Banke/House-Prices/blob/main/img/plot_model4_bi?raw=true)
   
   There are some leverage points but the error is minimal hence they will not have substantial effect on regression line.
-
-
-
-
+  
+  **Testing Independence in errors**
+  We use Durbin Watson Test to test autocorrelation in our model. 
+  The test value is 1.979246. As the test statistic value is close to 2, there is no significant correlation in errors.
+  
+  
+As the assumptions of Linear Regression Model are satisfied and coefficient of determination (R^2) is close to 1, we can conclude the final model explains Sale Prices of Houses.

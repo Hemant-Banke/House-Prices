@@ -461,6 +461,22 @@ plot(y = model4.bi, x = fitted(model4), xlab="Fitted Values", ylab="bi",
      main="bi vs predicted values")
 # There are some leverage points but the error is minimal hence they will not have substantial effect on regression line
 
+# Testing Autocorrelation
+par(mfrow=c(1,1))
+model4.fit =fitted(model4)
+plot(y = model4.res, x = model4.fit, main="Residual Plot")
+lines(lowess(y = model4.res, x = model4.fit), col="red")
+
+# Durbin Watson Test
+dw_num = 0
+for (i in 2:length(model4.res)){
+  dw_num = dw_num + (model4.res[i] - model4.res[i-1])^2 
+}
+dw = dw_num / sum(model4.res^2)
+print(dw)
+durbinWatsonTest(model4.res)
+# The test value is 1.979246. As the test statistic value is close to 2, there is no autocorrelation
+
 
 ## Prediction
 # We will use model4 to predict the SalePrice for test data
