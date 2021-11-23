@@ -29,9 +29,10 @@ str(train_df)
 total_na = colSums(is.na(train_df))
 df_na = data.frame(
   col = colnames(train_df[which(total_na > 0)]), 
-  count = total_na[which(total_na > 0)]
+  count = total_na[which(total_na > 0)]*100/nrow(train_df)
 )
-barplot(df_na$count ~ df_na$col, col='blue', xlab='Columns', ylab='NA count', main="Missing values")
+barplot(df_na$count ~ df_na$col, col='blue', xlab='Columns', ylab='NA count %', 
+        main="Missing values", ylim=c(0,100))
 View(df_na)
 
 # Null values in Alley represent no alley, hence we should add them in a new Level 'None'
